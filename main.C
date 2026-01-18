@@ -30,12 +30,12 @@ public:
 
 //=============================================================
 vector<vector<double>> Q(19683, vector<double>(9,0));
+vector<vector<double>> Q1(19683, vector<double>(9,0));
 vector<status> S;
 vector<action> A;
 double learning_ratio = 0.15;
 double gama = 0.9;
 double ei = 1;
-int color=1;
 //1 is black, -1 is white, 0 is empty
 status chess;
 //===============================================================
@@ -43,23 +43,50 @@ status chess;
 void move(action a){
   chess.s[a.x*3+a.y]=1;
 }
+void move1(action a){
+  chess.s[a.x*3+a.y]=-1;
+}
 
 double R(action a) {
   if(chess.get(a.x, a.y) !=0){chess.s = {0,0,0,0,0,0,0,0,0};return -1; }
   move(a);
   for(int i = 0; i < 3; i++) {
     if((chess.get(i,0)==1 && chess.get(i,1)==1 && chess.get(i,2)==1) ||(chess.get(0,i)==1 && chess.get(1,i)==1 && chess.get(2,i)==1)) {
-      chess.s = {0,0,0,0,0,0,0,0,0};return color==1?1:-1;
+      chess.s = {0,0,0,0,0,0,0,0,0};return 1;
     }
     if((chess.get(i,0)==-1 && chess.get(i,1)==-1 && chess.get(i,2)==-1) ||(chess.get(0,i)==-1 && chess.get(1,i)==-1 && chess.get(2,i)==-1)) {
-      chess.s = {0,0,0,0,0,0,0,0,0};
+      chess.s = {0,0,0,0,0,0,0,0,0};return -1;
     }
   }
   if((chess.get(0,0)==1 && chess.get(1,1)==1 && chess.get(2,2)==1) || (chess.get(0,2)==1 && chess.get(1,1)==1 && chess.get(2,0)==1)) {
-    chess.s = {0,0,0,0,0,0,0,0,0};return color==1?1:-1;
+    chess.s = {0,0,0,0,0,0,0,0,0};return 1;
   }
   if((chess.get(0,0)==-1 && chess.get(1,1)==-1 && chess.get(2,2)==-1) || (chess.get(0,2)==-1 && chess.get(1,1)==-1 && chess.get(2,0)==-1)) {
-    chess.s = {0,0,0,0,0,0,0,0,0};
+    chess.s = {0,0,0,0,0,0,0,0,0};return -1;
+  }
+  int y=0;
+  for(int i=0;i<9;i++){
+    if(chess.s[i]==0)y++;
+  }
+  if(y==0){chess.s = {0,0,0,0,0,0,0,0,0};return 0;}
+  return -0.1; 
+}
+double R1(action a) {
+  if(chess.get(a.x, a.y) !=0){chess.s = {0,0,0,0,0,0,0,0,0};return -1; }
+  move1(a);
+  for(int i = 0; i < 3; i++) {
+    if((chess.get(i,0)==1 && chess.get(i,1)==1 && chess.get(i,2)==1) ||(chess.get(0,i)==1 && chess.get(1,i)==1 && chess.get(2,i)==1)) {
+      chess.s = {0,0,0,0,0,0,0,0,0};return -1;
+    }
+    if((chess.get(i,0)==-1 && chess.get(i,1)==-1 && chess.get(i,2)==-1) ||(chess.get(0,i)==-1 && chess.get(1,i)==-1 && chess.get(2,i)==-1)) {
+      chess.s = {0,0,0,0,0,0,0,0,0};return 1;
+    }
+  }
+  if((chess.get(0,0)==1 && chess.get(1,1)==1 && chess.get(2,2)==1) || (chess.get(0,2)==1 && chess.get(1,1)==1 && chess.get(2,0)==1)) {
+    chess.s = {0,0,0,0,0,0,0,0,0};return -1;
+  }
+  if((chess.get(0,0)==-1 && chess.get(1,1)==-1 && chess.get(2,2)==-1) || (chess.get(0,2)==-1 && chess.get(1,1)==-1 && chess.get(2,0)==-1)) {
+    chess.s = {0,0,0,0,0,0,0,0,0};return 1;
   }
   int y=0;
   for(int i=0;i<9;i++){
@@ -77,8 +104,13 @@ int getindex(status s){
   return -1;
 }
 
+
 double getbest_Q(){
   vector<double> tem = Q[getindex(chess)];
+  return *max_element(tem.begin(), tem.end());
+}
+double getbest_Q1(){
+  vector<double> tem = Q1[getindex(chess)];
   return *max_element(tem.begin(), tem.end());
 }
 
@@ -94,9 +126,17 @@ int getbest_A(){
     }
     return best_action;
 }
-void inverse(){
-  color*=-1;
-  for(int i=0;i<9;i++)chess.s[i]*=-1;
+int getbest_A1(){
+    int best_action = -1;
+    double best_value = -1e9; // 很小的初始值
+    for(int i=0; i<9; i++){
+        if(chess.get(A[i].x, A[i].y) != 0) continue; // 非法动作跳过
+        if(Q1[getindex(chess)][i] > best_value){
+            best_value = Q1[getindex(chess)][i];
+            best_action = i;
+        }
+    }
+    return best_action;
 }
 void print(){
   for(int i=0;i<3;i++){
@@ -133,7 +173,7 @@ int main(){
       A.push_back(t);
     }
   }
-  int epoch = 100000;
+  int epoch = 300000;
   srand(time(nullptr));
   while(epoch>1){
     //===============
@@ -152,9 +192,24 @@ int main(){
       double r = R(A[tem]);
       Q[index][tem] += learning_ratio*(r+gama*getbest_Q()-Q[index][tem]);//cout<<index<<" "<<tem<<endl;
     }
-    inverse();
+    //===============
+    if(rand()%100<ei*100){
+      int tem=rand()%9;
+      int index = getindex(chess);
+      double r = R1(A[tem]);
+      Q1[index][tem] += learning_ratio*(r+gama*getbest_Q()-Q1[index][tem]);
+      //cout<<index<<" "<<tem<<endl;
+    }
+    //===============
+    else
+    {
+      int tem=getbest_A();
+      int index = getindex(chess);
+      double r = R1(A[tem]);
+      Q1[index][tem] += learning_ratio*(r+gama*getbest_Q()-Q1[index][tem]);//cout<<index<<" "<<tem<<endl;
+    }
     epoch--;
-    ei-=ei<0.2?0:0.000001;
+    ei-=ei<0.2?0:0.0001;
   }
   
   for(int i=0;i<19683;i++){
@@ -163,18 +218,20 @@ int main(){
     }
     //cout<<endl;
   }chess.s = {0,0,0,0,0,0,0,0,0};
-  while(true){
   
+  
+  
+  while(true){
   int xx,yy;
   cout<<"You: ";
   cin>>xx>>yy;
   action t(xx,yy);
-  move(t);
-  inverse();
+  move1(t);
+
   print();
   
   cout<<"AI: "<<getbest_A()<<endl;
   R(A[getbest_A()]);
-  inverse();print();
+  print();
   }
 }
